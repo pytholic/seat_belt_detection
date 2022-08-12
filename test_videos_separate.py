@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import numpy as np
 import logging
 import time
+from collections import deque
 
 VIDEO = "./videos/2.mp4"  # 2.mp4
 WEIGHTS = "YOLOFI2.weights"
@@ -22,7 +23,6 @@ class BeltDetected:
     def __init__(self):
         self.belt_frames = []  # main part
         self.belt_corner_frames = []  # corner part
-        self.result = None
 
     def add_belt(self, frame):
         self.belt_frames.append(frame)
@@ -55,7 +55,8 @@ def get_classes():
 
 
 def belt_detector(net, img, belt_detected, current_frame):
-    pred = []
+    pred_left = []
+    pred_right = []
     blob = cv2.dnn.blobFromImage(img, 0.00392, (480, 480), (0, 0, 0), True, crop=False)
     net.setInput(blob)
 
@@ -81,7 +82,6 @@ def belt_detector(net, img, belt_detected, current_frame):
                 y = int(center_y - h / 2)
                 cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
                 
-                
                 # if class_id == 1:
                 #     belt_detected.add_corner_belt(current_frame)
                 #     pred.append("detected")
@@ -89,11 +89,11 @@ def belt_detector(net, img, belt_detected, current_frame):
                     belt_detected.add_belt(current_frame)
                     
                     if center_x < mid_x:
-                        pred.append("detected left")
+                        pred_left.append("detected left")
                     elif center_x > mid_x:
-                        pred.append("detected right")
-
-    return belt_detected, pred
+                        pred_right.append("detected right")
+    
+    return belt_detected, pred_left, pred_right
 
 
 def apply_clahe(img, **kwargs):
@@ -125,11 +125,14 @@ def adjust_gamma(image, gamma=1.0):
 
     return cv2.LUT(image, table)
 
+def print_text(img, text: str, org=(100,100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=2.5, color=(0,255,0), thickness=5):
+    cv2.putText(img, text, org=org, fontFace=fontFace, fontScale=fontScale, color=color, thickness=thickness)
+
 def main():
     with video_capture(VIDEO) as cap:
 
-        predictions_left = []
-        predictions_right = []
+        predictions_left = deque([])
+        predictions_right = deque([])
         net = cv2.dnn.readNet(WEIGHTS, CONFIG)
         frame_id = -1
         belt_detected = BeltDetected()
@@ -144,9 +147,11 @@ def main():
             #img = frame[1][:, 50: -50]
             img = frame[1]
             
-            img = img[300:800, 400:1500]  # [300:800, 300:1500]
+            ### PREPROCESSING ###
+            
+            img = img[300:900, 400:1500]  # [300:800, 300:1500]
             #print(img.shape)     
-            #img = cv2.flip(img, 0)
+            #img = cv2.flip(img, 1)
             
             # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             # img = cv2.equalizeHist(img)
@@ -158,7 +163,7 @@ def main():
             # b_image_eq = cv2.equalizeHist(b_image)
             # img = cv2.merge((r_image_eq, g_image_eq, b_image_eq))
             
-            img = cv2.GaussianBlur(img, (9,9), 0)
+            #img = cv2.GaussianBlur(img, (5,5), 0)
             #img = cv2.medianBlur((img), 15)
 
             # kernel_sharp = np.array([[0, -1, 0],
@@ -168,6 +173,8 @@ def main():
                                [-1, 9,-1],
                                [-1, -1, -1]])
             img = cv2.filter2D(src=img, ddepth=-1, kernel=kernel_sharp)
+            
+            img = cv2.GaussianBlur(img, (5,5), 0)
             
             #print(img.shape)
 
@@ -180,23 +187,26 @@ def main():
             
             # img = cv2.resize(img, (512, 512), interpolation = cv2.INTER_AREA)
             # img = adjust_gamma(img, gamma=2.0)
-            #img = cv2.detailEnhance(img, sigma_s=25, sigma_r=0.15)  # 0.15
+            # img = cv2.detailEnhance(img, sigma_s=25, sigma_r=0.15)  # 0.15
             
-            belt_detected, pred = belt_detector(net, img, belt_detected, frame_id)
+            ### DETECTION ###
             
+            belt_detected, pred_left, pred_right = belt_detector(net, img, belt_detected, frame_id)
+            
+            ### RESULTS PREOCESSING ###
             # Append results in predictions array
-            if pred.count("detected left") > 0:
-                predictions_left.insert(0, "Detected Left")
+            if len(pred_left) > 0:
+                predictions_left.appendleft("Detected Left")
             else:
-                predictions_left.insert(0, "Not detected")
+                predictions_left.appendleft("Not detected")
                 
                 
-            if pred.count("detected right") > 0:
-                predictions_right.insert(0, "Detected Right")
+            if len(pred_right) > 0:
+                predictions_right.appendleft("Detected Right")
             else:
-                predictions_right.insert(0, "Not detected")
+                predictions_right.appendleft("Not detected")
                 
-            # Pop last element when size is greater than 50
+            # Pop last element when size is greater than 200
             # this way we restrict our predictions length 
             # to recent 200 frames
             
@@ -204,10 +214,10 @@ def main():
                 predictions_left.pop()
             if len(predictions_right) > 200:
                 predictions_right.pop()
-                
-            img = cv2.resize(img, (2048, 1024))  
+            
+            img = cv2.resize(img, (img.shape[1]*2, img.shape[0]*2))  
 
-            #out.write(img)
+            # out.write(img)
 
             # Threshold logic
             cnt_on_left = predictions_left.count("Detected Left")
@@ -218,24 +228,23 @@ def main():
             thres_left = cnt_on_left / (cnt_on_left + cnt_off_left)
             
             if thres_left > 0.5:
-                cv2.putText(img, "Left belt is on", org=(100,100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=2.5, color=(0,255,0), thickness=5)
+                print_text(img, "Left belt is on", org=(100,100))
                 #print("Belt is on.")
             else:
-                cv2.putText(img, "Left belt is off", org=(100,100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=2.5, color=(0,255,0), thickness=5)
+                print_text(img, "Left belt is off", org=(100,100))
                 #print("Belt is off.")
                 
                 
             thres_right = cnt_on_right / (cnt_on_right + cnt_off_right)
             
             if thres_right > 0.5:
-                cv2.putText(img, "Right belt is on", org=(1000,100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=2.5, color=(0,255,0), thickness=5)
+                print_text(img, "Right belt is on", org=(1400,100))
                 #print("Belt is on.")
             else:
-                cv2.putText(img, "Right belt is off", org=(1000,100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=2.5, color=(0,255,0), thickness=5)
+                print_text(img, "Right belt is off", org=(1400,100))
                 #print("Belt is off.")
 
-            print(cnt_on_left, cnt_off_left,"          ",cnt_on_right, cnt_off_right)
-
+            print("Left Passenger: ", cnt_on_left, cnt_off_left,"\t\t", "Right Passenger: ", cnt_on_right, cnt_off_right)
 
             cv2.imshow("Image", img)
 
