@@ -139,6 +139,7 @@ def main():
         fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
         out = cv2.VideoWriter('output.mp4',fourcc, 20.0, (2200,1000))
         while True:
+            start = time.time()
             frame = cap.read()
             frame_id += 1
             
@@ -193,7 +194,14 @@ def main():
             
             belt_detected, pred_left, pred_right = belt_detector(net, img, belt_detected, frame_id)
             
+            end = time.time()
+            
             ### RESULTS PREOCESSING ###
+            
+            # Calculate the frames per second
+            fps = 1 / (end - start)
+            print_text(img, f"FPS: {fps:.2f}", org=(20,480), fontScale=1.5, color=(0,0,255), thickness=2)
+            
             # Append results in predictions array
             if len(pred_left) > 0:
                 predictions_left.appendleft("Detected Left")
