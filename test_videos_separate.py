@@ -58,14 +58,22 @@ def belt_detector(net, img, belt_detected, current_frame):
     pred_left = []
     pred_right = []
     blob = cv2.dnn.blobFromImage(img, 0.00392, (480, 480), (0, 0, 0), True, crop=False)
-    net.setInput(blob)
-
+    
     height, width, channels = img.shape
     
     mid_x = width / 2
     mid_y = height / 2
-
+    
+    start = time.time()
+    
+    net.setInput(blob)
     outs = net.forward(get_layers(net))
+    
+    end=time.time()
+    
+    # Calulate fps
+    fps = 1 / (end - start)
+    
     for out in outs:
         for detection in out:
             #print(detection)
@@ -93,7 +101,7 @@ def belt_detector(net, img, belt_detected, current_frame):
                     elif center_x > mid_x:
                         pred_right.append("detected right")
     
-    return belt_detected, pred_left, pred_right
+    return belt_detected, pred_left, pred_right, fps
 
 
 def apply_clahe(img, **kwargs):
@@ -138,8 +146,7 @@ def main():
         belt_detected = BeltDetected()
         fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
         out = cv2.VideoWriter('output.mp4',fourcc, 20.0, (2200,1000))
-        while True:
-            start = time.time()
+        while True:            
             frame = cap.read()
             frame_id += 1
             
@@ -192,14 +199,12 @@ def main():
             
             ### DETECTION ###
             
-            belt_detected, pred_left, pred_right = belt_detector(net, img, belt_detected, frame_id)
+            belt_detected, pred_left, pred_right, fps = belt_detector(net, img, belt_detected, frame_id)
             
-            end = time.time()
             
             ### RESULTS PREOCESSING ###
             
-            # Calculate the frames per second
-            fps = 1 / (end - start)
+            # Show fps
             print_text(img, f"FPS: {fps:.2f}", org=(20,480), fontScale=1.5, color=(0,0,255), thickness=2)
             
             # Append results in predictions array
