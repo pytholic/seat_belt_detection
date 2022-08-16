@@ -76,11 +76,11 @@ def belt_detector(net, img, belt_detected, current_frame):
             if confidence > 0.2:
                 center_x = int(detection[0] * width)
                 center_y = int(detection[1] * height)
-                w = int(detection[2] * width)
-                h = int(detection[3] * height)
-                x = int(center_x - w / 2)
-                y = int(center_y - h / 2)
-                cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                # w = int(detection[2] * width)
+                # h = int(detection[3] * height)
+                # x = int(center_x - w / 2)
+                # y = int(center_y - h / 2)
+                # cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
                 
                 # if class_id == 1:
                 #     belt_detected.add_corner_belt(current_frame)
@@ -136,8 +136,8 @@ def main():
         net = cv2.dnn.readNet(WEIGHTS, CONFIG)
         frame_id = -1
         belt_detected = BeltDetected()
-        #fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-        #out = cv2.VideoWriter('output.mp4',fourcc, 20.0, (2048,1024))
+        fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
+        out = cv2.VideoWriter('output.mp4',fourcc, 20.0, (2200,1000))
         while True:
             frame = cap.read()
             frame_id += 1
@@ -149,7 +149,7 @@ def main():
             
             ### PREPROCESSING ###
             
-            img = img[300:900, 400:1500]  # [300:800, 300:1500]
+            img = img[300:800, 400:1500]  # [300:800, 300:1500]
             #print(img.shape)     
             #img = cv2.flip(img, 1)
             
@@ -217,8 +217,6 @@ def main():
             
             img = cv2.resize(img, (img.shape[1]*2, img.shape[0]*2))  
 
-            # out.write(img)
-
             # Threshold logic
             cnt_on_left = predictions_left.count("Detected Left")
             cnt_off_left = predictions_left.count("Not detected")
@@ -248,12 +246,14 @@ def main():
 
             cv2.imshow("Image", img)
 
+            out.write(img)
+            
             key = cv2.waitKey(1)
             if key == 27:
                 break
         
         cap.release()    
-        #out.release()
+        out.release()
         cv2.destroyAllWindows()
     
 if __name__ == '__main__':
