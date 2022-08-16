@@ -74,7 +74,7 @@ def belt_detector(net, img, belt_detected, current_frame):
     # Calulate fps
     fps = 1 / (end - start)
     
-    for out in outs:
+    for out in outs: 
         for detection in out:
             #print(detection)
             scores = detection[5:]
@@ -100,6 +100,10 @@ def belt_detector(net, img, belt_detected, current_frame):
                         pred_left.append("detected left")
                     elif center_x > mid_x:
                         pred_right.append("detected right")
+    
+    # Remove repetitive predictions
+    pred_left = set(pred_left)
+    pred_right = set(pred_right)
     
     return belt_detected, pred_left, pred_right, fps
 
@@ -201,6 +205,8 @@ def main():
             
             belt_detected, pred_left, pred_right, fps = belt_detector(net, img, belt_detected, frame_id)
             
+            print(pred_left)
+            print(pred_right)
             
             ### RESULTS PREOCESSING ###
             
