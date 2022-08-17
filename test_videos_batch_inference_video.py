@@ -8,7 +8,7 @@ import logging
 import time
 from collections import deque
 
-VIDEO = "./videos/2.mp4"  # 2.mp4
+VIDEO = "./videos/1.mp4"  # 2.mp4
 WEIGHTS = "YOLOFI2.weights"
 CONFIG = "YOLOFI.cfg"
 OBJ_NAMES = "obj.names"
@@ -67,15 +67,15 @@ def belt_detector(net, img_list, belt_detected, current_frame):
     mid_x = width / 2
     mid_y = height / 2
     
-    start = time.time()
+    #start = time.time()
     
     net.setInput(blob)
     outs = net.forward(get_layers(net))
     
-    end=time.time()
+    #end=time.time()
     
     # Calulate fps
-    fps = 1 / (end - start)
+    #fps = 1 / (end - start)
     
     for out in outs: 
         for detections in out:
@@ -89,15 +89,7 @@ def belt_detector(net, img_list, belt_detected, current_frame):
                 if confidence > 0.2:
                     center_x = int(detection[0] * width)
                     center_y = int(detection[1] * height)
-                    # w = int(detection[2] * width)
-                    # h = int(detection[3] * height)
-                    # x = int(center_x - w / 2)
-                    # y = int(center_y - h / 2)
-                    # cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                    
-                    # if class_id == 1:
-                    #     belt_detected.add_corner_belt(current_frame)
-                    #     pred.append("detected")
+
                     if class_id == 0:
                         belt_detected.add_belt(current_frame)
                         
@@ -117,7 +109,7 @@ def belt_detector(net, img_list, belt_detected, current_frame):
             if len(right) > 0:
                 pred_right.append("Detected Right")    
         
-    return belt_detected, pred_left, pred_right, fps
+    return belt_detected, pred_left, pred_right
 
 
 def apply_clahe(img, **kwargs):
@@ -158,8 +150,6 @@ def main():
         net = cv2.dnn.readNet(WEIGHTS, CONFIG)
         frame_id = -1
         belt_detected = BeltDetected()
-        fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-        #out = cv2.VideoWriter('output.mp4',fourcc, 20.0, (2200,1000))
         while True:    
             frame = cap.read()
             frame_id += 1
@@ -180,7 +170,6 @@ def main():
             
 
             img = increase_brightness(img)
-            #img = apply_clahe(img=img, clipLimit=5, tileGridSize=(5, 5))
             img = apply_gabor(img=img, ksize=(31, 31), sigma=2.9, theta=160,
                             lambd=14.5, gamma=35, psi=50, ktype=cv2.CV_64F)
             
@@ -188,11 +177,10 @@ def main():
             
             if (len(img_list) % 200) == 0:
                                     
+                print(frame_id)
+                                    
                 ### DETECTION ###
-                belt_detected, pred_left, pred_right, fps = belt_detector(net, img_list, belt_detected, frame_id)
-            
-                print(len(pred_left))
-                print(len(pred_right))
+                belt_detected, pred_left, pred_right = belt_detector(net, img_list, belt_detected, frame_id)
                         
                 ### RESULTS PROCESSING ###
             
@@ -205,18 +193,14 @@ def main():
                 thres_right = cnt_on_right / NUM_FRAMES
                 
                 if thres_left > 0.5:
-                    print_text(img, "Left belt is on", org=(100,100))
-                    #print("Belt is on.")
+                    print("Left belt is on")
                 else:
-                    print_text(img, "Left belt is off", org=(100,100))
-                    #print("Belt is off.")
+                    print("Left belt is off")
                                 
                 if thres_right > 0.5:
-                    print_text(img, "Right belt is on", org=(600,100))
-                    #print("Belt is on.")
+                    print("Right belt is on")
                 else:
-                    print_text(img, "Right belt is off", org=(600,100))
-                    #print("Belt is off.")
+                    print("Right belt is off")
             
                 img_list.clear()
                 
@@ -228,15 +212,12 @@ def main():
             img = cv2.resize(img, (img.shape[1]*2, img.shape[0]*2)) 
             
             cv2.imshow("Image", img)
-
-            #out.write(img)
-            
+                        
             key = cv2.waitKey(1)
             if key == 27:
                 break
         
         cap.release()    
-        #out.release()
         cv2.destroyAllWindows()
     
 if __name__ == '__main__':
