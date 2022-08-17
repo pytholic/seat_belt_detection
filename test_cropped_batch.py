@@ -12,30 +12,20 @@ VIDEO = "./videos/1.mp4"
 WEIGHTS = "YOLOFI2.weights"
 CONFIG = "YOLOFI.cfg"
 OBJ_NAMES = "obj.names"
-SAVE_PATH = dirname(dirname(abspath(__file__))) + "/"
 NUM_FRAMES = 200
 
-
-logging.basicConfig(level=logging.INFO)
-
 class BeltDetected:
-    # list of frames (ids) where the belt part was detected as closed
-    # first frame has id 0
+
     def __init__(self):
         self.belt_frames = []  # main part
-        self.belt_corner_frames = []  # corner part
 
     def add_belt(self, frame):
         self.belt_frames.append(frame)
 
-    def add_corner_belt(self, frame):
-        self.belt_corner_frames.append(frame)
-    
+
 @contextmanager
 def video_capture(*args, **kwargs):
     cap = cv2.VideoCapture(*args, **kwargs)
-    #start_frame_number = 500
-    #cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame_number)
     try:
         yield cap
     finally:
@@ -62,9 +52,6 @@ def belt_detector(net, img_list, belt_detected, current_frame):
     blob = cv2.dnn.blobFromImages(img_list, 0.00392, (480, 480), (0, 0, 0), True, crop=False)
     
     height, width, channels = img_list[0].shape
-    
-    mid_x = width / 2
-    mid_y = height / 2
       
     net.setInput(blob)
     outs = net.forward(get_layers(net))
@@ -86,6 +73,7 @@ def belt_detector(net, img_list, belt_detected, current_frame):
                         
                         temp.append('detected')
 
+            # Remove redundant predictions
             temp = set(temp)
                 
             if len(temp) > 0:
@@ -115,16 +103,10 @@ def increase_brightness(img):
     final_hsv = cv2.merge((h, s, v))
     return cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
 
-def adjust_gamma(image, gamma=1.0):
-
-    invGamma = 1.0 / gamma
-    table = np.array([((i / 255.0) ** invGamma) * 255
-        for i in np.arange(0, 256)]).astype("uint8")
-
-    return cv2.LUT(image, table)
 
 def print_text(img, text: str, org=(100,100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0, color=(0,255,0), thickness=2):
     cv2.putText(img, text, org=org, fontFace=fontFace, fontScale=fontScale, color=color, thickness=thickness)
+
 
 def main():
     with video_capture(VIDEO) as cap:

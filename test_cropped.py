@@ -12,29 +12,19 @@ VIDEO = "./videos/6.mp4"  # 2.mp4
 WEIGHTS = "YOLOFI2.weights"
 CONFIG = "YOLOFI.cfg"
 OBJ_NAMES = "obj.names"
-SAVE_PATH = dirname(dirname(abspath(__file__))) + "/"
-
-
-logging.basicConfig(level=logging.INFO)
 
 class BeltDetected:
-    # list of frames (ids) where the belt part was detected as closed
-    # first frame has id 0
+
     def __init__(self):
         self.belt_frames = []  # main part
-        self.belt_corner_frames = []  # corner part
 
     def add_belt(self, frame):
         self.belt_frames.append(frame)
-
-    def add_corner_belt(self, frame):
-        self.belt_corner_frames.append(frame)
+  
     
 @contextmanager
 def video_capture(*args, **kwargs):
     cap = cv2.VideoCapture(*args, **kwargs)
-    #start_frame_number = 500
-    #cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame_number)
     try:
         yield cap
     finally:
@@ -60,9 +50,6 @@ def belt_detector(net, img, belt_detected, current_frame):
     
     height, width, channels = img.shape
     
-    mid_x = width / 2
-    mid_y = height / 2
-    
     start = time.time()
     
     net.setInput(blob)
@@ -77,22 +64,23 @@ def belt_detector(net, img, belt_detected, current_frame):
         for detection in out:
             scores = detection[5:]
             class_id = np.argmax(scores)
-            #print(class_id)
             confidence = scores[class_id]
             if confidence > 0.2:
                 center_x = int(detection[0] * width)
                 center_y = int(detection[1] * height)
-                w = int(detection[2] * width)
-                h = int(detection[3] * height)
-                x = int(center_x - w / 2)
-                y = int(center_y - h / 2)
-                cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+                # Draw boxes for testing
+                # w = int(detection[2] * width)
+                # h = int(detection[3] * height)
+                # x = int(center_x - w / 2)
+                # y = int(center_y - h / 2)
+                # cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
                 if class_id == 0:
                     belt_detected.add_belt(current_frame)
                     pred.append('detected')
     
-    # Remove repetitive predictions
+    # Remove redundant predictions
     pred = set(pred)
     
     return belt_detected, pred, fps
@@ -119,16 +107,10 @@ def increase_brightness(img):
     final_hsv = cv2.merge((h, s, v))
     return cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
 
-def adjust_gamma(image, gamma=1.0):
-
-    invGamma = 1.0 / gamma
-    table = np.array([((i / 255.0) ** invGamma) * 255
-        for i in np.arange(0, 256)]).astype("uint8")
-
-    return cv2.LUT(image, table)
 
 def print_text(img, text: str, org=(100,100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=2.5, color=(0,255,0), thickness=5):
     cv2.putText(img, text, org=org, fontFace=fontFace, fontScale=fontScale, color=color, thickness=thickness)
+
 
 def main():
     with video_capture(VIDEO) as cap:
@@ -149,11 +131,10 @@ def main():
             
             ### PREPROCESSING ###
             
+            # Flip for passenger
             img = cv2.flip(img, 1)
             
             img = img[300:800, 1000:1500]  # [300:800, 300:1500]
-
-            #img = img[300:800, 500:1000]
             
             kernel_sharp = np.array([[-1, -1, -1],
                                [-1, 9,-1],
@@ -183,10 +164,6 @@ def main():
                 predictions.appendleft("Detected")
             else:
                 predictions.appendleft("Not detected")
-                
-            # Pop last element when size is greater than 200
-            # this way we restrict our predictions length 
-            # to recent 200 frames
             
             if len(predictions) > 200:
                 predictions.pop()
