@@ -51,7 +51,6 @@ def get_classes():
 
 
 def belt_detector(queue, net, img_list, belt_detected, current_frame):
-    print('good')
     pred = [] 
     blob = cv2.dnn.blobFromImages(img_list, 0.00392, (480, 480), (0, 0, 0), True, crop=False)
     height, width, channels = img_list[0].shape
@@ -80,7 +79,7 @@ def belt_detector(queue, net, img_list, belt_detected, current_frame):
                 
             if len(temp) > 0:
                 pred.append("Detected")   
-        
+    print('done')
     queue.put(belt_detected, pred)
     #return belt_detected, pred
 
