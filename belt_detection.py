@@ -133,11 +133,8 @@ def inference(net, img_list, frame_id, belt_detected, passenger: str):
     passenger: One of 'driver' or 'passenger'
     """
                                 
-    ### DETECTION ###
-    
+    # Detection
     belt_detected, pred = belt_detector(net, img_list, belt_detected, frame_id)
-            
-    ### RESULTS PROCESSING ###
 
     # Count predictions
     cnt_on = len(pred)
@@ -159,8 +156,7 @@ def main():
         frame_id = -1
         belt_detected = BeltDetected()
         
-        run_once = True
-        while run_once:    
+        while True:    
             frame = cap.read()
             frame_id += 1
             
@@ -168,7 +164,8 @@ def main():
                 break
             img = frame[1]
                         
-            # Preprocessing 
+            ### PREPROCESSING ###
+             
             img_flipped = cv2.flip(img, 1)
             img_flipped = img_flipped[300:800, 1000:1500]
             img = img[300:800, 1000:1500]
@@ -177,6 +174,8 @@ def main():
             img_list.append(img)
             img_flipped_list.append(img_flipped)
                       
+            ### INFERENCE ###
+            
             if frame_id % 200 == 0 and frame_id != 0:  
                 print(f"Current frame: {frame_id}")
                 print('\n')
@@ -204,17 +203,6 @@ def main():
                 # Calulate total time
                 total_time = time_driver + time_passenger
                 print(f"Total inference time: {total_time}")
-            
-                break
-            #run_once = False
-        
-            # img = cv2.resize(img, (img.shape[1]*2, img.shape[0]*2)) 
-            
-            # cv2.imshow("Image", img)
-                        
-            # key = cv2.waitKey(1)
-            # if key == 27:
-            #     break
             
         cap.release()    
         cv2.destroyAllWindows()

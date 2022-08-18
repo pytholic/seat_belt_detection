@@ -2,11 +2,16 @@
 from os.path import dirname, abspath
 
 import cv2
-from contextlib import contextmanager
 import numpy as np
 import logging
 import time
+import multiprocessing
+import threading
+
+from multiprocessing import Queue
 from collections import deque
+from contextlib import contextmanager
+
 
 VIDEO = "./videos/1.mp4" 
 WEIGHTS = "YOLOFI2.weights"
@@ -46,11 +51,8 @@ def get_classes():
 
 
 def belt_detector(net, img_list, belt_detected, current_frame):
-    
-    pred = []
-        
+    pred = [] 
     blob = cv2.dnn.blobFromImages(img_list, 0.00392, (480, 480), (0, 0, 0), True, crop=False)
-    
     height, width, channels = img_list[0].shape
       
     net.setInput(blob)
@@ -62,7 +64,6 @@ def belt_detector(net, img_list, belt_detected, current_frame):
             for detection in detections:                
                 scores = detection[5:]
                 class_id = np.argmax(scores)
-                #print(class_id)
                 confidence = scores[class_id]
                 if confidence > 0.2:
                     center_x = int(detection[0] * width)
@@ -78,21 +79,23 @@ def belt_detector(net, img_list, belt_detected, current_frame):
                 
             if len(temp) > 0:
                 pred.append("Detected")   
-        
+
     return belt_detected, pred
 
+# Preprocessing utilities
 
-def apply_clahe(img, **kwargs):
+def apply_clahe(img, clipLimit=5, tileGridSize=(15, 15)):
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     lab = list(cv2.split(lab))
-    clahe = cv2.createCLAHE(**kwargs)
+    clahe = cv2.createCLAHE(clipLimit, tileGridSize)
     lab[0] = clahe.apply(lab[0])
     lab = cv2.merge((lab[0], lab[1], lab[2]))
     return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
 
-def apply_gabor(img, **kwargs):
-    g_kernel = cv2.getGaborKernel(**kwargs)
+def apply_gabor(img, ksize=(31, 31), sigma=2.9, theta=160,
+                            lambd=14.5, gamma=35, psi=50, ktype=cv2.CV_64F):
+    g_kernel = cv2.getGaborKernel(ksize, sigma, theta, lambd, gamma, psi, ktype)
     return cv2.filter2D(img, cv2.CV_8UC3, g_kernel.sum())
 
 
@@ -104,16 +107,62 @@ def increase_brightness(img):
     return cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
 
 
+def sharpen(img):
+    kernel_sharp = np.array([[-1, -1, -1],
+                             [-1, 9,-1],
+                             [-1, -1, -1]])
+    img = cv2.filter2D(src=img, ddepth=-1, kernel=kernel_sharp)
+    return img
+
+
+def preprocess(img):
+    img = sharpen(img)
+    img = cv2.GaussianBlur(img, (5,5), 0)
+    img = increase_brightness(img)
+    img = apply_clahe(img)
+    img = apply_gabor(img)
+    return img
+
+# Print function (for testing)
 def print_text(img, text: str, org=(100,100), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1.0, color=(0,255,0), thickness=2):
     cv2.putText(img, text, org=org, fontFace=fontFace, fontScale=fontScale, color=color, thickness=thickness)
 
 
+def inference(net, img_list, frame_id, belt_detected, passenger: str):
+    """
+    net: Model architecture to use for inference
+    img_list: Batch of input frames
+    frame_id: Current frame number
+    belt_detector: BeltDetector object
+    passenger: One of 'driver' or 'passenger'
+    """
+                              
+    # Detection
+    belt_detected, pred = belt_detector(net, img_list, belt_detected, frame_id)
+        
+    # Count predictions
+    cnt_on = len(pred)
+    
+    # Get ratio
+    thres = cnt_on / NUM_FRAMES
+    
+    if thres > 0.5:
+        print(f"Belt is on for {passenger}")
+    else:
+        print(f"Belt is off for {passenger}")
+
+
 def main():
+    
+    #print("Number of cpu : ", multiprocessing.cpu_count())
+    
     with video_capture(VIDEO) as cap:
         img_list = []
+        img_flipped_list = []
         net = cv2.dnn.readNet(WEIGHTS, CONFIG)
         frame_id = -1
         belt_detected = BeltDetected()
+        
         while True:    
             frame = cap.read()
             frame_id += 1
@@ -121,56 +170,49 @@ def main():
             if not frame[0]:
                 break
             img = frame[1]
+                        
+            ### PREPROCESSING ### 
             
-            ### PREPROCESSING ###
-            
-            img = cv2.flip(img, 1)
-            
-            img = img[300:800, 1000:1500]  # [300:800, 300:1500]
-
-            kernel_sharp = np.array([[-1, -1, -1],
-                                        [-1, 9,-1],
-                                        [-1, -1, -1]])
-            img = cv2.filter2D(src=img, ddepth=-1, kernel=kernel_sharp)
-            img = cv2.GaussianBlur(img, (5,5), 0)
-            
-
-            img = increase_brightness(img)
-            img = apply_clahe(img=img, clipLimit=5, tileGridSize=(15, 15))
-            img = apply_gabor(img=img, ksize=(31, 31), sigma=2.9, theta=160,
-                            lambd=14.5, gamma=35, psi=50, ktype=cv2.CV_64F)
-            
+            img_flipped = cv2.flip(img.copy(), 1)
+            img_flipped = img_flipped[300:800, 1000:1500]
+            img = img[300:800, 1000:1500]
+            img_flipped = preprocess(img_flipped)
+            img = preprocess(img)
             img_list.append(img)
+            img_flipped_list.append(img_flipped)
+             
+            ### INFERENCE ###         
             
-            if (len(img_list) % 200) == 0:
+            if frame_id % 200 == 0 and frame_id != 0:  
+                print(f"Current frame: {frame_id}")
+                print('\n')
+
+                # Run inference threads
+                t1 = threading.Thread(target=inference, args=(net, img_flipped_list, frame_id, belt_detected), kwargs={"passenger": 'passenger'})
+                t2 = threading.Thread(target=inference, args=(net, img_list, frame_id, belt_detected), kwargs={"passenger": 'driver'})
                 
-                print(frame_id)
-                                    
-                ### DETECTION ###
-                belt_detected, pred = belt_detector(net, img_list, belt_detected, frame_id)
-                        
-                ### RESULTS PROCESSING ###
-            
-                # Count predictions
-                cnt_on = len(pred)
+                print("***Starting inference***")
+                start = time.time()
                 
-                # Get ratio
-                thres = cnt_on / NUM_FRAMES
+                t1.start()
+                print("Waiting for process 1")
+                t2.start()
+                print("Waiting for process 2")
+                t1.join()
+                print("Process 1 ended")
+                t2.join()
+                print("Process 2 ended")
                 
-                if thres > 0.5:
-                    print("Belt is on")
-                else:
-                    print("Belt is off")
-            
+                end = time.time()
+
                 img_list.clear()
-        
-            img = cv2.resize(img, (img.shape[1]*2, img.shape[0]*2)) 
-            
-            cv2.imshow("Image", img)
-                        
-            key = cv2.waitKey(1)
-            if key == 27:
-                break
+                img_flipped_list.clear()
+                
+                print("\n")
+                
+                # Calulate total time
+                total_time = end - start
+                print(f"Total inference time: {total_time}")
             
         cap.release()    
         cv2.destroyAllWindows()
