@@ -1,15 +1,9 @@
-
-from os.path import dirname, abspath
-
 import cv2
 import numpy as np
-import logging
 import time
 import multiprocessing
-import threading
 
 from multiprocessing import Queue
-from collections import deque
 from contextlib import contextmanager
 
 
@@ -18,6 +12,7 @@ WEIGHTS = "YOLOFI2.weights"
 CONFIG = "YOLOFI.cfg"
 OBJ_NAMES = "obj.names"
 NUM_FRAMES = 200
+
 
 class BeltDetected:
 
@@ -50,9 +45,15 @@ def get_classes():
     return classes
 
 
-def belt_detector(queue, net, img_list, belt_detected, current_frame):
+queue = Queue()
+
+def belt_detector(net, img_list, belt_detected, current_frame):
     pred = [] 
-    blob = cv2.dnn.blobFromImages(img_list, 0.00392, (480, 480), (0, 0, 0), True, crop=False)
+    
+    print("fetching blob")
+    blob = cv2.dnn.blobFromImages(img_list, 0.00392, (480, 480), (0, 0, 0), True, crop=False)    
+    print("Got the blob")
+    
     height, width, channels = img_list[0].shape
       
     net.setInput(blob)
@@ -137,12 +138,10 @@ def inference(net, img_list, frame_id, belt_detected, passenger: str):
     belt_detector: BeltDetector object
     passenger: One of 'driver' or 'passenger'
     """
-    
-    queue = Queue()
                               
     ### DETECTION ###
     
-    belt_detected, pred = belt_detector(queue, net, img_list, belt_detected, frame_id)
+    belt_detected, pred = belt_detector(net, img_list, belt_detected, frame_id)
     
     item = queue.get()
     
@@ -199,29 +198,7 @@ def main():
                 print(f"Current frame: {frame_id}")
                 print('\n')
 
-                # Inference
-                # t1 = threading.Thread(target=inference, args=(net, img_flipped_list, frame_id, belt_detected), kwargs={"passenger": 'passenger'})
-                # t2 = threading.Thread(target=inference, args=(net, img_list, frame_id, belt_detected), kwargs={"passenger": 'driver'})
-                
-                # #t1 = threading.Thread(target=test, kwargs={"passenger":'passsenger'})
-                # #t2 = threading.Thread(target=test, kwargs={"passenger":'driver'})
-                
-                # print("***Starting inference***")
-                # start = time.time()
-                
-                # t1.start()
-                # print("Waiting for process 1")
-                # t2.start()
-                # print("Waiting for process 2")
-                # t1.join()
-                # print("Process 1 ended")
-                # t2.join()
-                # print("Process 2 ended")
-                
-                # end = time.time()
-
-
-                # Inference
+                # Inference with Process
 
                 p1 = multiprocessing.Process(target=inference, args=[net, img_flipped_list, frame_id, belt_detected, 'passenger']) #, kwargs={"passenger": 'passenger'})
                 #p2 = multiprocessing.Process(target=inference, args=[(net,) img_list, frame_id, belt_detected)], kwargs={"passenger": 'driver'})
@@ -245,14 +222,15 @@ def main():
                 end = time.time()
                 
                 
-                # num=1
+                # Inference with Pool
                 
+                # num=1
                 # pool = multiprocessing.Pool()
                 
                 # print("***Starting inference***")
                 # start = time.time()
                 
-                # #pool.starmap(inference, [(net, img_flipped_list, frame_id, belt_detected, 'passenger')])
+                # pool.starmap(inference, [(net, img_flipped_list, frame_id, belt_detected, 'passenger')])
                 # #pool.starmap(test, [(num, 'driver')])
                 # #pool.starmap(test, [(num, 'passenger')])
 
