@@ -134,6 +134,7 @@ def inference(net, img_list, frame_id, belt_detected, passenger: str):
     """
                                 
     ### DETECTION ###
+    
     belt_detected, pred = belt_detector(net, img_list, belt_detected, frame_id)
             
     ### RESULTS PROCESSING ###
@@ -167,7 +168,7 @@ def main():
                 break
             img = frame[1]
                         
-            # Preprocessing
+            # Preprocessing 
             img_flipped = cv2.flip(img, 1)
             img_flipped = img_flipped[300:800, 1000:1500]
             img = img[300:800, 1000:1500]
@@ -204,7 +205,8 @@ def main():
                 total_time = time_driver + time_passenger
                 print(f"Total inference time: {total_time}")
             
-        run_once = False
+                break
+            #run_once = False
         
             # img = cv2.resize(img, (img.shape[1]*2, img.shape[0]*2)) 
             
